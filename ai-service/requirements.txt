@@ -1,0 +1,41 @@
+# requirements.txt for AI Service
+# -------------------------------------------------------
+# This file lists all Python packages our AI service needs.
+# Install them all at once by running:
+#   pip install -r requirements.txt
+# -------------------------------------------------------
+
+# FastAPI: A modern, fast web framework for building APIs in Python
+fastapi==0.109.0
+
+# Uvicorn: The server that runs our FastAPI application
+# [standard] includes extra features like auto-reload
+uvicorn[standard]==0.27.0
+
+# PyMuPDF: Used to read and extract text from PDF files
+# Installed as 'fitz' in Python code
+PyMuPDF==1.27.2.3
+
+# Python-multipart: Required by FastAPI to handle file uploads
+python-multipart==0.0.7
+
+# python-dotenv: Loads environment variables from .env file
+python-dotenv==1.0.0
+
+# Requests: Makes HTTP requests to other services (like calling Ollama)
+requests==2.31.0
+
+# Transformers: Hugging Face library for AI/NLP models (for summarization)
+# NOTE: This is a large package. Only install if you are NOT using Ollama.
+# Uncomment the line below when you are ready to use Hugging Face models:
+# transformers==4.37.0
+# torch==2.1.0
+
+# Sentence Transformers: Generates text embeddings for semantic similarity
+# Used by the POST /similarity endpoint to compare two legal case texts
+# Model 'all-MiniLM-L6-v2' downloads automatically on first use (~90MB cache)
+sentence-transformers==5.5.1
+
+# NumPy: Fast mathematical array operations (used for cosine similarity math)
+# Installed automatically with sentence-transformers, pinned here for clarity
+numpy==2.4.6

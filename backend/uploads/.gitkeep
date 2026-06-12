@@ -1,0 +1,2 @@
+# This file exists to tell Git to track the empty uploads/ folder.
+# Actual uploaded PDF files are ignored via .gitignore — they should never be committed.

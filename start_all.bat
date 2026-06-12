@@ -1,0 +1,13 @@
+@echo off
+echo Starting AI Case Law Summarizer Services...
+
+echo Starting Frontend...
+start "Frontend" cmd /c "cd frontend & npm run dev"
+
+echo Starting Backend...
+start "Backend" cmd /c "cd backend & npm run dev"
+
+echo Starting AI Service...
+start "AI Service" cmd /k "cd ai-service & if not exist venv\Scripts\activate.bat (echo Recreating virtual environment... & python -m venv venv & call venv\Scripts\activate.bat & pip install -r requirements.txt) else (call venv\Scripts\activate.bat) & python main.py"
+
+echo All services are starting up in separate windows!
