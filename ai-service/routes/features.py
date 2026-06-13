@@ -129,9 +129,6 @@ The JSON object must have EXACTLY these two keys:
 - "issues": a JSON array of strings, where each string is a specific legal question the judge had to answer
 - "principles": a JSON array of strings, where each string is a legal rule, law, doctrine, statute, or precedent that was applied
 
-EXAMPLE OF VALID OUTPUT:
-{{"issues": ["Whether the defendant breached the terms of the contract", "Whether the plaintiff suffered quantifiable loss"], "principles": ["The doctrine of promissory estoppel prevents a party from going back on a promise", "Section 73 of the Indian Contract Act provides remedy for breach"]}}
-
 RULES:
 1. Output ONLY the JSON object — nothing before it, nothing after it
 2. Every item in both arrays must be a plain string (not an object or nested array)

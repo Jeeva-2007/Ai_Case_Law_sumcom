@@ -66,3 +66,4 @@ frontend/dist/
 frontend/build/
 backend/dist/
 backend/build/
+backend/uploads/

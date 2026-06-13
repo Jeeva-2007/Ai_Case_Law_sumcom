@@ -17,7 +17,7 @@
 // -------------------------------------------------------
 
 import React, { useState, useEffect } from 'react'
-import { getSimilarityScore, compareCases } from '../services/api'
+import { getSimilarityScore, compareCases, downloadReport } from '../services/api'
 
 // -------------------------------------------------------
 // SUB-COMPONENT: SkeletonBlock
@@ -157,6 +157,102 @@ function BulletList({ items, emptyText = 'None found' }) {
 }
 
 // -------------------------------------------------------
+// HELPER: formatTextWithBold
+// Parses **text** syntax and renders it in bold style.
+// -------------------------------------------------------
+function formatTextWithBold(text) {
+  if (!text) return null
+  
+  // Split by bold markdown syntax (**text**)
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const cleanText = part.slice(2, -2)
+      return <strong key={index} className="text-white font-semibold">{cleanText}</strong>
+    }
+    return part
+  })
+}
+
+// -------------------------------------------------------
+// HELPER: renderStructuredSummary
+// Splits the raw summary text into visually distinct sections
+// (Core Facts, Main Dispute, Final Ruling) and formats list items cleanly.
+// -------------------------------------------------------
+function renderStructuredSummary(summaryText) {
+  if (!summaryText) {
+    return <p className="text-slate-500 italic text-sm">No summary available.</p>
+  }
+
+  const headings = ['Core Facts', 'Main Dispute', 'Final Ruling', 'Summary']
+  const regex = /(\*\*Core Facts\*\*|Core Facts:|Core Facts|\*\*Main Dispute\*\*|Main Dispute:|Main Dispute|\*\*Final Ruling\*\*|Final Ruling:|Final Ruling|\*\*Summary\*\*|Summary:|Summary)/gi
+
+  const parts = summaryText.split(regex)
+  const sections = []
+  let currentTitle = 'Summary'
+  let currentContent = ''
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i].trim()
+    if (!part) continue
+
+    const matchedHeading = headings.find(h => {
+      const normalizedPart = part.replace(/\*/g, '').replace(/:/g, '').trim().toLowerCase()
+      return normalizedPart === h.toLowerCase()
+    })
+
+    if (matchedHeading) {
+      if (currentContent.trim()) {
+        sections.push({ title: currentTitle, content: currentContent.trim() })
+      }
+      currentTitle = matchedHeading
+      currentContent = ''
+    } else {
+      currentContent += (currentContent ? '\n' : '') + part
+    }
+  }
+
+  if (currentContent.trim()) {
+    sections.push({ title: currentTitle, content: currentContent.trim() })
+  }
+
+  return (
+    <div className="space-y-4 mt-2">
+      {sections.map((sec, idx) => {
+        // Check if content is a list of lines
+        const lines = sec.content.split('\n').map(l => l.trim()).filter(Boolean)
+        const looksLikeList = lines.length > 1 || lines.some(line => /^\d+\.|^[-•*]/.test(line))
+
+        return (
+          <div key={idx} className="p-3 bg-slate-900/40 rounded-xl border border-slate-700/40">
+            <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2">
+              {sec.title}
+            </h5>
+            {looksLikeList ? (
+              <ul className="space-y-1.5">
+                {lines.map((line, lIdx) => {
+                  const cleanLine = line.replace(/^\d+\.\s*|^[-•*]\s*/, '').trim()
+                  return (
+                    <li key={lIdx} className="flex items-start gap-2 text-slate-300 text-sm leading-relaxed">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500/80 flex-shrink-0" />
+                      <span>{formatTextWithBold(cleanLine)}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                {formatTextWithBold(sec.content)}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// -------------------------------------------------------
 // SUB-COMPONENT: CaseCard
 // Displays one legal case's summary, issues, and principles.
 //
@@ -179,18 +275,21 @@ function CaseCard({ label, color, caseData }) {
     <div className={`flex flex-col h-full p-5 bg-slate-800/50 border ${borderColor} rounded-2xl`}>
 
       {/* Card header label */}
-      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border text-xs font-bold uppercase tracking-widest mb-4 self-start ${headerColor}`}>
-        <span>⚖️</span>
-        <span>{label}</span>
+      <div className="flex flex-col gap-1 mb-4">
+        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border text-xs font-bold uppercase tracking-widest mb-1 self-start ${headerColor}`}>
+          <span>⚖️</span>
+          <span>{label}</span>
+        </div>
+        {caseData?.name && (
+          <h3 className="text-white font-bold text-sm tracking-tight truncate max-w-full block" title={caseData.name}>
+            {caseData.name}
+          </h3>
+        )}
       </div>
 
       {/* Summary */}
       <SectionLabel>Summary</SectionLabel>
-      <p className="text-slate-300 text-sm leading-relaxed">
-        {caseData?.summary || (
-          <span className="text-slate-500 italic">No summary available.</span>
-        )}
-      </p>
+      {renderStructuredSummary(caseData?.summary)}
 
       {/* Issues */}
       <SectionLabel>Key Legal Issues</SectionLabel>
@@ -383,12 +482,13 @@ function ConflictMatrix({ comparison }) {
 // If no props are passed, the component shows a demo with hardcoded sample data
 // so you can see the layout immediately without needing real PDFs.
 // -------------------------------------------------------
-function ComparisonDashboard({ caseAData, caseBData }) {
+function ComparisonDashboard({ caseAData, caseBData, onBack }) {
 
   // ---- STATE ----
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)       // string | null
   const [dismissed, setDismissed] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   // Results from the AI service calls
   const [similarity, setSimilarity] = useState(null)   // { similarity_score, interpretation }
@@ -429,6 +529,36 @@ function ComparisonDashboard({ caseAData, caseBData }) {
   const resolvedA = caseAData || demoA
   const resolvedB = caseBData || demoB
   const isDemo = !caseAData || !caseBData
+
+  // Triggers the download of the PDF report using backend/src/routes/report.js
+  const handleExportPDF = async () => {
+    setExporting(true)
+    try {
+      const reportData = {
+        case_a: {
+          name: resolvedA.name || 'Case A',
+          summary: resolvedA.summary,
+          issues: resolvedA.issues,
+          principles: resolvedA.principles,
+        },
+        case_b: {
+          name: resolvedB.name || 'Case B',
+          summary: resolvedB.summary,
+          issues: resolvedB.issues,
+          principles: resolvedB.principles,
+        },
+        similarity_score: similarity?.similarity_score ?? 0,
+        similarity_interpretation: similarity?.interpretation || '',
+        comparison: comparison,
+      }
+      await downloadReport(reportData)
+    } catch (err) {
+      console.error('Failed to export PDF:', err)
+      alert('Failed to generate and download the PDF report. Please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // -------------------------------------------------------
   // EFFECT: Run the AI analysis whenever case data changes
@@ -475,7 +605,7 @@ function ComparisonDashboard({ caseAData, caseBData }) {
     }
 
     runAnalysis()
-  }, []) // Empty array = run only on first mount (demo mode uses fixed data)
+  }, [resolvedA, resolvedB]) // Dependency array re-runs similarity/comparison when cases change
 
   // -------------------------------------------------------
   // RENDER
@@ -486,20 +616,47 @@ function ComparisonDashboard({ caseAData, caseBData }) {
       {/* ---- HEADER ---- */}
       <header className="sticky top-0 z-20 border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚖️</span>
-            <div>
-              <h1 className="text-white font-bold text-base leading-none">Case Law AI</h1>
-              <p className="text-slate-500 text-xs">Summarizer &amp; Comparator</p>
+          <div className="flex items-center gap-4">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-850 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
+                title="Go back to file list"
+              >
+                <span>⬅️</span>
+                <span>Upload List</span>
+              </button>
+            )}
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚖️</span>
+              <div>
+                <h1 className="text-white font-bold text-base leading-none">Case Law AI</h1>
+                <p className="text-slate-500 text-xs mt-0.5">Summarizer &amp; Comparator</p>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             {isDemo && (
-              <span className="text-xs text-amber-400 bg-amber-900/30 border border-amber-500/30 px-3 py-1 rounded-full">
+              <span className="text-xs text-amber-400 bg-amber-900/30 border border-amber-500/30 px-3 py-1 rounded-full font-medium">
                 Demo Mode — no PDFs loaded
               </span>
             )}
-            <span className="text-xs text-indigo-400 bg-indigo-900/30 border border-indigo-500/30 px-3 py-1 rounded-full">
+            {similarity && comparison && (
+              <button
+                onClick={handleExportPDF}
+                disabled={exporting}
+                className={`
+                  flex items-center gap-2 text-xs font-bold px-4 py-1.5 rounded-lg border transition-all duration-200
+                  ${exporting
+                    ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed animate-pulse'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 hover:border-indigo-400 shadow-md shadow-indigo-500/20 active:scale-[0.98]'}
+                `}
+              >
+                <span>📥</span>
+                <span>{exporting ? 'Exporting...' : 'Export PDF Report'}</span>
+              </button>
+            )}
+            <span className="text-xs text-indigo-400 bg-indigo-900/30 border border-indigo-500/30 px-3 py-1.5 rounded-full font-medium">
               Comparison Dashboard
             </span>
           </div>

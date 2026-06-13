@@ -244,9 +244,6 @@ These conflicts are the most valuable part of the analysis.
 If a field has no relevant items, use an empty array [].
 If adversarial strategy cannot be determined, use "Insufficient information to determine strategy."
 
-MINI EXAMPLE OF VALID OUTPUT:
-{{"common_issues": ["Whether the contract was breached"], "common_principles": ["Doctrine of promissory estoppel"], "structural_differences": ["Case A found breach; Case B found no breach despite similar facts"], "adversarial_strategy": {{"if_you_rely_on_case_a": "Opponent will cite Case B to show courts do not always find breach on similar facts.", "how_to_distinguish_them": "Case A involved a written contract while Case B was entirely oral, making proof of terms harder."}}}}
-
 NOW ANALYSE THESE TWO CASES:
 
 {case_a_block}

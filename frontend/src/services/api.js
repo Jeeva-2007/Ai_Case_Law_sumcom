@@ -75,6 +75,21 @@ export const checkBackendHealth = async () => {
 }
 
 // -------------------------------------------------------
+// FUNCTION: analyseFile
+// Purpose: Trigger text extraction, summarization, and key feature extraction on backend
+//
+// Parameters:
+//   - savedName: File name on backend disk (with timestamp prefix)
+//   - originalName: Original uploaded file name
+//
+// Returns: The analysis result object containing summary, issues, principles
+// -------------------------------------------------------
+export const analyseFile = async (savedName, originalName) => {
+  const response = await apiClient.post('/api/analyse', { savedName, originalName })
+  return response.data
+}
+
+// -------------------------------------------------------
 // AI SERVICE DIRECT CALLS (Python FastAPI on port 8000)
 // -------------------------------------------------------
 // These functions call the Python AI service directly from the browser.
@@ -163,4 +178,53 @@ export const compareCases = async (caseA, caseB) => {
     case_b: caseB,
   })
   return response.data
+}
+
+// -------------------------------------------------------
+// FUNCTION: downloadReport
+// Calls POST /api/download-report on the Node.js backend.
+// The backend generates a PDF and streams it back as a binary blob.
+// We use the browser's built-in mechanism to trigger a file download.
+//
+// Parameters:
+//   reportData (object): The full comparison data object containing:
+//     {
+//       case_a: { name, summary, issues, principles },
+//       case_b: { name, summary, issues, principles },
+//       similarity_score: 78,
+//       similarity_interpretation: "High similarity...",
+//       comparison: { common_issues, common_principles, structural_differences, adversarial_strategy }
+//     }
+//
+// Returns: void — triggers browser file download directly
+//
+// HOW THE DOWNLOAD TRICK WORKS:
+//   1. Axios receives the PDF bytes as a 'blob' (Binary Large OBject).
+//   2. We create a temporary hidden <a> element in the DOM.
+//   3. We attach the blob as a fake URL to the <a> element.
+//   4. We programmatically click the <a> element — browser sees it as a click on a download link.
+//   5. The browser saves the file. We remove the temporary element.
+// -------------------------------------------------------
+export const downloadReport = async (reportData) => {
+  // responseType: 'blob' tells axios to treat the response as binary data
+  // Without this, axios would try to parse the PDF bytes as JSON and fail
+  const response = await apiClient.post('/api/download-report', reportData, {
+    responseType: 'blob',
+  })
+
+  // Create a temporary URL pointing to the blob data
+  // URL.createObjectURL() creates an in-memory URL like "blob:http://localhost:5173/abc123"
+  const blobUrl = window.URL.createObjectURL(new Blob([response.data]))
+
+  // Create a hidden anchor element and simulate a click to trigger download
+  const link = document.createElement('a')
+  link.href = blobUrl
+  link.setAttribute('download', 'Legal_Comparison_Report.pdf')  // default save-as filename
+  document.body.appendChild(link)   // must be in the DOM for Firefox compatibility
+  link.click()                       // simulate the click — browser starts download
+
+  // Clean up: remove the temporary element and revoke the blob URL
+  // revokeObjectURL() frees the memory used by the blob URL
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(blobUrl)
 }

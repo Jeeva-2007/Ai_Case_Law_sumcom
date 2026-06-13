@@ -14,6 +14,8 @@ const cors = require('cors')        // Allows our React frontend to talk to this
 // Import our route files
 // Each route file handles a specific group of API endpoints
 const uploadRoutes = require('./src/routes/upload')
+const reportRoutes = require('./src/routes/report')
+const analyseRoutes = require('./src/routes/analyse')
 
 // Create an Express application
 const app = express()
@@ -30,8 +32,11 @@ const PORT = process.env.PORT || 5000
 // Enable CORS (Cross-Origin Resource Sharing)
 // Without this, the browser blocks requests from frontend (port 3000) to backend (port 5000)
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Allow only our frontend
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],                   // Allowed HTTP methods
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:5173',   // Vite dev server default port
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }))
 
 // Parse incoming JSON request bodies
@@ -60,9 +65,16 @@ app.get('/api/health', (req, res) => {
 })
 
 // Mount our upload routes at /api/upload
-// This means: any request to /api/upload will be handled by uploadRoutes
-// Example: POST /api/upload → handled by upload.js → uploadController.js
+// POST /api/upload → uploadController.js handles file saving
 app.use('/api/upload', uploadRoutes)
+
+// Mount our analyse routes at /api/analyse
+app.use('/api/analyse', analyseRoutes)
+
+// Mount the report route at /api/download-report
+// POST /api/download-report → generates and streams a PDF to the browser
+// GET  /api/download-report → returns usage guide JSON
+app.use('/api/download-report', reportRoutes)
 
 // GET /
 // Root route — just a simple welcome message
@@ -93,6 +105,7 @@ app.use((err, req, res, next) => {
 // -------------------------------------------------------
 app.listen(PORT, () => {
   console.log(`✅ Backend server is running on http://localhost:${PORT}`)
-  console.log(`🔍 Health check: http://localhost:${PORT}/api/health`)
-  console.log(`📤 Upload endpoint: http://localhost:${PORT}/api/upload`)
+  console.log(`🔍 Health check:      http://localhost:${PORT}/api/health`)
+  console.log(`📤 Upload endpoint:   http://localhost:${PORT}/api/upload`)
+  console.log(`📋 Report endpoint:   http://localhost:${PORT}/api/download-report`)
 })
