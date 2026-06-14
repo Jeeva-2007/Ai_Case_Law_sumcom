@@ -178,49 +178,72 @@ function parseSummaryText(summaryText) {
   if (!summaryText) return [];
 
   const headings = ['Core Facts', 'Main Dispute', 'Final Ruling', 'Summary'];
-  const regex = /(\*\*(?:Core Facts|Main Dispute|Final Ruling|Summary):?\*\*|^\s*(?:Core Facts|Main Dispute|Final Ruling|Summary):)/gmi;
+  const headingSpecs = [
+    { title: 'Core Facts', pattern: /(?:#+\s*)?(?:\*\*\s*)?Core Facts(?:\s*\*\*)?:?/gi },
+    { title: 'Main Dispute', pattern: /(?:#+\s*)?(?:\*\*\s*)?Main Dispute(?:\s*\*\*)?:?/gi },
+    { title: 'Final Ruling', pattern: /(?:#+\s*)?(?:\*\*\s*)?Final Ruling(?:\s*\*\*)?:?/gi },
+    { title: 'Summary', pattern: /(?:#+\s*)?(?:\*\*\s*)?Summary(?:\s*\*\*)?:?/gi },
+  ];
 
-  const parts = (summaryText || '').split(regex);
+  // Find all matches in the text
+  const matches = [];
+  headingSpecs.forEach(spec => {
+    spec.pattern.lastIndex = 0;
+    let match;
+    while ((match = spec.pattern.exec(summaryText)) !== null) {
+      matches.push({
+        title: spec.title,
+        index: match.index,
+        length: match[0].length,
+      });
+    }
+  });
+
+  // Sort matches by index
+  matches.sort((a, b) => a.index - b.index);
+
   const sections = [];
-  let currentTitle = 'Summary';
-  let currentContent = '';
-
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i].trim();
-    if (!part) continue;
-
-    const matchedHeading = headings.find(h => {
-      const normalizedPart = part.replace(/\*/g, '').replace(/:/g, '').trim().toLowerCase();
-      return normalizedPart === h.toLowerCase();
-    });
-
-    if (matchedHeading) {
-      if (currentContent.trim()) {
-        sections.push({ title: currentTitle, content: currentContent.trim() });
+  if (matches.length === 0) {
+    sections.push({ title: 'Summary', content: summaryText });
+  } else {
+    // If text before the first match exists, treat as Intro/Summary
+    if (matches[0].index > 0) {
+      const intro = summaryText.substring(0, matches[0].index).trim();
+      const cleanIntro = intro.replace(/^[#\s\-*•]+|[#\s\-*•]+$/g, '').trim();
+      if (cleanIntro && cleanIntro.length > 5) {
+        sections.push({ title: 'Summary', content: intro });
       }
-      // Clean title
-      let cleanTitle = part.replace(/\*/g, '').replace(/:/g, '').trim()
-      headings.forEach(h => {
-        if (cleanTitle.toLowerCase() === h.toLowerCase()) {
-          cleanTitle = h
-        }
-      })
-      currentTitle = cleanTitle;
-      currentContent = '';
-    } else {
-      currentContent += (currentContent ? '\n' : '') + part;
+    }
+
+    // Extract segments between matches
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index + matches[i].length;
+      const end = (i + 1 < matches.length) ? matches[i + 1].index : summaryText.length;
+      const content = summaryText.substring(start, end).trim();
+      sections.push({ title: matches[i].title, content });
     }
   }
 
-  if (currentContent.trim()) {
-    sections.push({ title: currentTitle, content: currentContent.trim() });
-  }
+  // Filter and clean sections
+  const cleanSections = sections
+    .map(sec => {
+      const cleanLines = sec.content
+        .split('\n')
+        .map(line => {
+          const cleaned = line.trim();
+          if (/^[#\*\-•\s\=\_]+$/.test(cleaned)) {
+            return '';
+          }
+          return cleaned;
+        })
+        .filter(Boolean);
 
-  // Filter out empty sections or sections containing only bullet characters
-  const cleanSections = sections.filter(sec => {
-    const cleanedText = sec.content.replace(/^\d+\.\s*|^[-•*]\s*/, '').trim()
-    return cleanedText.length > 0
-  })
+      return {
+        title: sec.title,
+        content: cleanLines.join('\n')
+      };
+    })
+    .filter(sec => sec.content.trim().length > 0);
 
   return cleanSections;
 }

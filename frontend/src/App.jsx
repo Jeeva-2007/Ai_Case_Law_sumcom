@@ -13,7 +13,7 @@ import React, { useState } from 'react'
 import FileUploader from './components/FileUploader'
 import ComparisonDashboard from './pages/ComparisonDashboard'
 import ErrorBoundary from './components/ErrorBoundary'
-import { analyseFile } from './services/api'
+import { analyseFile, getHistoryCases, deleteHistoryCase } from './services/api'
 
 function App() {
   // ---- STATE ----
@@ -34,6 +34,34 @@ function App() {
   // Loading and error states for running the parallel AI pipeline
   const [loadingAnalysis, setLoadingAnalysis] = useState(false)
   const [analysisError, setAnalysisError] = useState(null)
+
+  // History tab states
+  const [historyCases, setHistoryCases] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyError, setHistoryError] = useState(null)
+
+  // Load history cases from database
+  const loadHistory = async () => {
+    setLoadingHistory(true)
+    setHistoryError(null)
+    try {
+      const cases = await getHistoryCases()
+      setHistoryCases(cases)
+    } catch (err) {
+      console.error('Failed to load history:', err)
+      setHistoryError('Failed to load saved cases from the database.')
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  // Handle tab navigation clicks
+  const handleNavClick = (page) => {
+    setCurrentPage(page)
+    if (page === 'history') {
+      loadHistory()
+    }
+  }
 
   // Called by FileUploader when upload succeeds
   const handleUploadSuccess = (result) => {
@@ -124,7 +152,7 @@ function App() {
     const isActive = currentPage === page
     return (
       <button
-        onClick={() => setCurrentPage(page)}
+        onClick={() => handleNavClick(page)}
         className={`
           flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
           transition-all duration-200
@@ -147,8 +175,8 @@ function App() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
       {/* ---- TOP HEADER BAR ---- */}
-      {/* Only shown on the upload page — dashboard has its own header */}
-      {currentPage === 'upload' && (
+      {/* Shown on upload and history pages — dashboard has its own header */}
+      {(currentPage === 'upload' || currentPage === 'history') && (
         <header className="border-b border-slate-700/50 bg-slate-900/60 backdrop-blur-sm sticky top-0 z-10">
           <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
 
@@ -164,6 +192,7 @@ function App() {
             {/* Navigation tabs */}
             <nav className="flex items-center gap-2">
               <NavTab page="upload"    label="Upload"     icon="📤" />
+              <NavTab page="history"   label="History"    icon="📜" />
               <NavTab page="dashboard" label="Compare"    icon="⚖️" />
             </nav>
           </div>
@@ -304,6 +333,178 @@ function App() {
                 Skip upload — open dashboard in demo mode →
               </button>
             </div>
+          )}
+        </main>
+      )}
+
+      {/* HISTORY PAGE */}
+      {currentPage === 'history' && (
+        <main className="max-w-5xl mx-auto px-6 py-12 animate-fade-in">
+          {/* Page title */}
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-white mb-3">
+              Saved Case History &amp; Cache
+            </h2>
+            <p className="text-slate-400 text-sm max-w-xl mx-auto leading-relaxed">
+              View previously uploaded and analyzed judgments. Select exactly two cases from history to compare them instantly using database-cached summaries, or delete them to clear database and storage space.
+            </p>
+          </div>
+
+          {/* Loader or Error */}
+          {loadingHistory && (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <div className="w-12 h-12 rounded-full border-4 border-slate-800 border-t-indigo-500 animate-spin" />
+              <span className="text-slate-400 text-sm">Loading saved cases...</span>
+            </div>
+          )}
+
+          {historyError && (
+            <div className="mb-6 p-4 bg-red-950/40 border border-red-500/20 text-red-400 rounded-2xl text-center text-sm">
+              ❌ {historyError}
+            </div>
+          )}
+
+          {/* List of cases */}
+          {!loadingHistory && !historyError && (
+            <>
+              {historyCases.length === 0 ? (
+                <div className="text-center py-20 border border-dashed border-slate-800 rounded-3xl bg-slate-900/20">
+                  <span className="text-5xl block mb-4">📜</span>
+                  <h3 className="text-lg font-bold text-white mb-2">No Cases Saved Yet</h3>
+                  <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto leading-relaxed">
+                    Upload judgments in the "Upload" tab. Once uploaded and analyzed, they will automatically appear here.
+                  </p>
+                  <button
+                    onClick={() => setCurrentPage('upload')}
+                    className="py-2.5 px-5 text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all duration-200"
+                  >
+                    Go Upload PDF
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {historyCases.map((c) => {
+                    const isSelected = selectedFilesToCompare.some((f) => f.savedName === c.saved_name)
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          handleToggleSelectFile({
+                            savedName: c.saved_name,
+                            originalName: c.original_name,
+                          })
+                        }}
+                        className={`
+                          p-5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-6 cursor-pointer group select-none
+                          ${isSelected
+                            ? 'bg-indigo-950/40 border-indigo-500/50 shadow-lg shadow-indigo-500/5'
+                            : 'bg-slate-900/50 border-slate-800/80 hover:bg-slate-800/50 hover:border-slate-700/60'}
+                        `}
+                      >
+                        {/* Checkbox + Title */}
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          {/* Checkbox indicator */}
+                          <div
+                            className={`
+                              w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-200 border text-xs font-bold
+                              ${isSelected
+                                ? 'bg-indigo-600 border-indigo-500 text-white'
+                                : 'border-slate-700 text-transparent'}
+                            `}
+                          >
+                            ✓
+                          </div>
+                          
+                          {/* File Details */}
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-white text-base truncate pr-4">
+                              {c.original_name}
+                            </h4>
+                            <div className="flex items-center gap-4 mt-1.5">
+                              {/* Analysis status badge */}
+                              {c.summary ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400">
+                                  ⚡ Analyzed
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/60 border border-amber-500/20 text-[10px] font-semibold text-amber-400">
+                                  ⏳ Registered
+                                </span>
+                              )}
+                              {/* File URL */}
+                              {c.file_url && (
+                                <a
+                                  href={c.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()} // don't toggle select
+                                  className="text-xs text-slate-500 hover:text-indigo-400 underline transition-colors"
+                                >
+                                  Open PDF Link ↗
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-3">
+                          {/* Delete button */}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation() // don't toggle select
+                              if (confirm(`Are you sure you want to delete "${c.original_name}"?`)) {
+                                try {
+                                  await deleteHistoryCase(c.id)
+                                  // Remove from local selection state if it was selected
+                                  setSelectedFilesToCompare((prev) => prev.filter((f) => f.savedName !== c.saved_name))
+                                  // Reload list
+                                  loadHistory()
+                                } catch (err) {
+                                  alert('Failed to delete case.')
+                                }
+                              }
+                            }}
+                            className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-red-400 hover:bg-red-950/20 hover:border-red-500/20 transition-all duration-200"
+                            title="Delete judgment"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Compare selection bar */}
+              {historyCases.length > 0 && (
+                <div className="mt-8 p-6 bg-slate-900/40 border border-slate-800 rounded-3xl text-center max-w-xl mx-auto shadow-xl">
+                  <h4 className="text-white font-bold mb-2">Compare Selected Cases</h4>
+                  <p className="text-slate-400 text-xs mb-4 pr-2 pl-2 leading-relaxed">
+                    Select exactly two cases from your history above. You will see a fast comparison dashboard generated from database-cached summaries.
+                  </p>
+                  
+                  <button
+                    onClick={handleRunComparison}
+                    disabled={selectedFilesToCompare.length !== 2 || loadingAnalysis}
+                    className={`
+                      w-full py-3.5 px-6 font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg
+                      ${selectedFilesToCompare.length === 2 && !loadingAnalysis
+                        ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white shadow-indigo-500/25 scale-[1.01] active:scale-[0.99]'
+                        : 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-50'}
+                    `}
+                  >
+                    <span>⚖️</span>
+                    <span>
+                      {loadingAnalysis
+                        ? 'Running Analysis...'
+                        : `Compare Selected Cases (${selectedFilesToCompare.length}/2)`}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </main>
       )}

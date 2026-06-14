@@ -17,6 +17,7 @@ const uploadRoutes = require('./src/routes/upload')
 const reportRoutes = require('./src/routes/report')
 const analyseRoutes = require('./src/routes/analyse')
 const aiProxyRoutes = require('./src/routes/aiProxy')
+const historyRoutes = require('./src/routes/history')
 
 // Create an Express application
 const app = express()
@@ -74,6 +75,9 @@ app.use('/api/analyse', analyseRoutes)
 
 // Mount the AI proxy routes at /api
 app.use('/api', aiProxyRoutes)
+
+// Mount the history routes at /api/history
+app.use('/api/history', historyRoutes)
 
 // Mount the report route at /api/download-report
 // POST /api/download-report → generates and streams a PDF to the browser

@@ -98,12 +98,14 @@ const uploadMiddleware = upload.array('documents', 10)
 // STEP 5: Controller Function — handles the request after multer runs
 // -------------------------------------------------------
 
+const supabase = require('../config/supabase')
+
 /**
  * handleFileUpload
  * Express route controller that processes uploaded PDF files
  * This runs AFTER multer has saved the files
  */
-const handleFileUpload = (req, res) => {
+const handleFileUpload = async (req, res) => {
   // req.files is populated by multer with info about saved files
   // If no files were uploaded, req.files will be undefined or empty
   if (!req.files || req.files.length === 0) {
@@ -124,8 +126,55 @@ const handleFileUpload = (req, res) => {
   }))
 
   // Log to the server console for debugging
-  console.log(`✅ Successfully uploaded ${req.files.length} file(s):`)
+  console.log(`✅ Successfully uploaded ${req.files.length} file(s) locally:`)
   uploadedFileSummaries.forEach((f) => console.log(`   - ${f.originalName} (${f.sizeMB} MB)`))
+
+  // -------------------------------------------------------
+  // STEP 6: Sync to Supabase Database & Storage (If configured)
+  // -------------------------------------------------------
+  if (supabase) {
+    console.log('📤 Syncing uploads to Supabase storage & database...')
+    for (const file of req.files) {
+      try {
+        const fileBuffer = fs.readFileSync(file.path)
+        
+        // 1. Upload to Supabase Storage (judgment-pdfs bucket)
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('judgment-pdfs')
+          .upload(file.filename, fileBuffer, {
+            contentType: 'application/pdf',
+            upsert: true
+          })
+
+        if (uploadError) {
+          console.error(`⚠️ Supabase Storage Upload Error for ${file.originalname}:`, uploadError.message)
+          continue
+        }
+
+        // 2. Get Public URL (to store in db)
+        const { data: { publicUrl } } = supabase.storage
+          .from('judgment-pdfs')
+          .getPublicUrl(file.filename)
+
+        // 3. Upsert Metadata into 'cases' Table
+        const { error: dbError } = await supabase
+          .from('cases')
+          .upsert({
+            original_name: file.originalname,
+            saved_name: file.filename,
+            file_url: publicUrl
+          }, { onConflict: 'saved_name' })
+
+        if (dbError) {
+          console.error(`⚠️ Supabase Database Insert Error for ${file.originalname}:`, dbError.message)
+        } else {
+          console.log(`   [Supabase] Synced: ${file.originalname} -> storage & db`)
+        }
+      } catch (err) {
+        console.error(`⚠️ Supabase upload processing error for ${file.originalname}:`, err.message)
+      }
+    }
+  }
 
   // Send a successful JSON response back to the frontend
   return res.status(200).json({

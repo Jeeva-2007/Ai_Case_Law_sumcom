@@ -185,3 +185,21 @@ export const downloadReport = async (reportData) => {
   document.body.removeChild(link)
   window.URL.revokeObjectURL(blobUrl)
 }
+
+// -------------------------------------------------------
+// FUNCTION: getHistoryCases
+// Purpose: Fetch all saved cases from database history
+// -------------------------------------------------------
+export const getHistoryCases = async () => {
+  const response = await apiClient.get('/api/history/cases')
+  return response.data
+}
+
+// -------------------------------------------------------
+// FUNCTION: deleteHistoryCase
+// Purpose: Delete a case and its related records by ID
+// -------------------------------------------------------
+export const deleteHistoryCase = async (id) => {
+  const response = await apiClient.delete(`/api/history/cases/${id}`)
+  return response.data
+}

@@ -15,6 +15,7 @@ const fs = require('fs')
 const path = require('path')
 const axios = require('axios')
 const FormData = require('form-data')
+const supabase = require('../config/supabase')
 
 // Read the Python AI service URL from environment variables, default to port 8000
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
@@ -49,6 +50,33 @@ const handleAnalyse = async (req, res) => {
   }
 
   try {
+    // -------------------------------------------------------
+    // STEP 1.5: Check Database Cache (Supabase)
+    // -------------------------------------------------------
+    if (supabase) {
+      console.log(`🔍 Checking database cache for: ${savedName}`)
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('saved_name', savedName)
+        .maybeSingle()
+
+      if (error) {
+        console.warn('⚠️ Supabase fetch error (will fallback to AI):', error.message)
+      } else if (data && data.summary) {
+        console.log(`⚡ Cache Hit! Loaded summary and features from Supabase for: ${originalName}`)
+        return res.status(200).json({
+          success: true,
+          name: originalName,
+          summary: data.summary,
+          issues: data.issues || [],
+          principles: data.principles || [],
+          modelUsed: 'cached-database',
+          isFallback: false,
+        })
+      }
+    }
+
     // -------------------------------------------------------
     // STEP 2: PDF Text Extraction (Python AI Service)
     // -------------------------------------------------------
@@ -96,6 +124,33 @@ const handleAnalyse = async (req, res) => {
     const { issues, principles } = featuresResponse.data
 
     console.log(`  [3/3] Analysis complete for case: ${originalName}`)
+
+    // -------------------------------------------------------
+    // STEP 3.5: Save Analysis Results to Database (Supabase)
+    // -------------------------------------------------------
+    if (supabase) {
+      try {
+        console.log(`💾 Saving analysis results to Supabase database for: ${originalName}`)
+        const { error: dbError } = await supabase
+          .from('cases')
+          .upsert({
+            original_name: originalName,
+            saved_name: savedName,
+            full_text: fullText,
+            summary: summaryText,
+            issues: issues || [],
+            principles: principles || []
+          }, { onConflict: 'saved_name' })
+
+        if (dbError) {
+          console.error(`⚠️ Supabase database update error:`, dbError.message)
+        } else {
+          console.log(`✅ Supabase database updated with analysis results.`)
+        }
+      } catch (err) {
+        console.error(`⚠️ Failed to save case to database:`, err.message)
+      }
+    }
 
     // -------------------------------------------------------
     // STEP 4: Return Combined Analysis JSON

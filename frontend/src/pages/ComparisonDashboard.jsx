@@ -184,44 +184,80 @@ function renderStructuredSummary(summaryText) {
     return <p className="text-slate-500 italic text-sm">No summary available.</p>
   }
 
-  const headings = ['Core Facts', 'Main Dispute', 'Final Ruling', 'Summary']
-  const regex = /(\*\*Core Facts\*\*|Core Facts:|Core Facts|\*\*Main Dispute\*\*|Main Dispute:|Main Dispute|\*\*Final Ruling\*\*|Final Ruling:|Final Ruling|\*\*Summary\*\*|Summary:|Summary)/gi
+  // Identify headings and their index ranges in the text
+  const headingSpecs = [
+    { title: 'Core Facts', pattern: /(?:#+\s*)?(?:\*\*\s*)?Core Facts(?:\s*\*\*)?:?/gi },
+    { title: 'Main Dispute', pattern: /(?:#+\s*)?(?:\*\*\s*)?Main Dispute(?:\s*\*\*)?:?/gi },
+    { title: 'Final Ruling', pattern: /(?:#+\s*)?(?:\*\*\s*)?Final Ruling(?:\s*\*\*)?:?/gi },
+    { title: 'Summary', pattern: /(?:#+\s*)?(?:\*\*\s*)?Summary(?:\s*\*\*)?:?/gi },
+  ]
 
-  const parts = summaryText.split(regex)
+  // Find all matches
+  const matches = []
+  headingSpecs.forEach(spec => {
+    spec.pattern.lastIndex = 0
+    let match
+    while ((match = spec.pattern.exec(summaryText)) !== null) {
+      matches.push({
+        title: spec.title,
+        index: match.index,
+        length: match[0].length,
+      })
+    }
+  })
+
+  // Sort matches by their starting index
+  matches.sort((a, b) => a.index - b.index)
+
   const sections = []
-  let currentTitle = 'Summary'
-  let currentContent = ''
-
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i].trim()
-    if (!part) continue
-
-    const matchedHeading = headings.find(h => {
-      const normalizedPart = part.replace(/\*/g, '').replace(/:/g, '').trim().toLowerCase()
-      return normalizedPart === h.toLowerCase()
-    })
-
-    if (matchedHeading) {
-      if (currentContent.trim()) {
-        sections.push({ title: currentTitle, content: currentContent.trim() })
+  if (matches.length === 0) {
+    sections.push({ title: 'Summary', content: summaryText })
+  } else {
+    // Capture any text prior to the first heading match
+    if (matches[0].index > 0) {
+      const intro = summaryText.substring(0, matches[0].index).trim()
+      const cleanIntro = intro.replace(/^[#\s\-*•]+|[#\s\-*•]+$/g, '').trim()
+      if (cleanIntro && cleanIntro.length > 5) {
+        sections.push({ title: 'Summary', content: intro })
       }
-      currentTitle = matchedHeading
-      currentContent = ''
-    } else {
-      currentContent += (currentContent ? '\n' : '') + part
+    }
+
+    // Extract segments between matches
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index + matches[i].length
+      const end = (i + 1 < matches.length) ? matches[i + 1].index : summaryText.length
+      const content = summaryText.substring(start, end).trim()
+      sections.push({ title: matches[i].title, content })
     }
   }
 
-  if (currentContent.trim()) {
-    sections.push({ title: currentTitle, content: currentContent.trim() })
-  }
+  // Filter and scrub sections
+  const cleanSections = sections
+    .map(sec => {
+      const cleanLines = sec.content
+        .split('\n')
+        .map(line => {
+          const cleaned = line.trim()
+          // Drop lines that contain only list/markdown structure symbols
+          if (/^[#\*\-•\s\=\_]+$/.test(cleaned)) {
+            return ''
+          }
+          return cleaned
+        })
+        .filter(Boolean)
+
+      return {
+        title: sec.title,
+        lines: cleanLines,
+        content: cleanLines.join('\n')
+      }
+    })
+    .filter(sec => sec.content.trim().length > 0)
 
   return (
     <div className="space-y-4 mt-2">
-      {sections.map((sec, idx) => {
-        // Check if content is a list of lines
-        const lines = sec.content.split('\n').map(l => l.trim()).filter(Boolean)
-        const looksLikeList = lines.length > 1 || lines.some(line => /^\d+\.|^[-•*]/.test(line))
+      {cleanSections.map((sec, idx) => {
+        const looksLikeList = sec.lines.length > 1 || sec.lines.some(line => /^\d+\.|^[-•*]/.test(line))
 
         return (
           <div key={idx} className="p-3 bg-slate-900/40 rounded-xl border border-slate-700/40">
@@ -230,8 +266,9 @@ function renderStructuredSummary(summaryText) {
             </h5>
             {looksLikeList ? (
               <ul className="space-y-1.5">
-                {lines.map((line, lIdx) => {
+                {sec.lines.map((line, lIdx) => {
                   const cleanLine = line.replace(/^\d+\.\s*|^[-•*]\s*/, '').trim()
+                  if (!cleanLine) return null
                   return (
                     <li key={lIdx} className="flex items-start gap-2 text-slate-300 text-sm leading-relaxed">
                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500/80 flex-shrink-0" />
