@@ -49,6 +49,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # React frontend
+        "http://localhost:5173",  # React frontend (Vite default)
         "http://localhost:5000",  # Node.js backend
     ],
     allow_credentials=True,

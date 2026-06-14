@@ -12,6 +12,7 @@
 import React, { useState } from 'react'
 import FileUploader from './components/FileUploader'
 import ComparisonDashboard from './pages/ComparisonDashboard'
+import ErrorBoundary from './components/ErrorBoundary'
 import { analyseFile } from './services/api'
 
 function App() {
@@ -142,7 +143,8 @@ function App() {
   // RENDER
   // -------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
       {/* ---- TOP HEADER BAR ---- */}
       {/* Only shown on the upload page — dashboard has its own header */}
@@ -317,7 +319,8 @@ function App() {
           }}
         />
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }
 

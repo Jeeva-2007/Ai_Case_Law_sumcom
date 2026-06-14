@@ -14,7 +14,7 @@ uvicorn[standard]==0.27.0
 
 # PyMuPDF: Used to read and extract text from PDF files
 # Installed as 'fitz' in Python code
-PyMuPDF==1.27.2.3
+PyMuPDF==1.24.14
 
 # Python-multipart: Required by FastAPI to handle file uploads
 python-multipart==0.0.7
@@ -34,8 +34,8 @@ requests==2.31.0
 # Sentence Transformers: Generates text embeddings for semantic similarity
 # Used by the POST /similarity endpoint to compare two legal case texts
 # Model 'all-MiniLM-L6-v2' downloads automatically on first use (~90MB cache)
-sentence-transformers==5.5.1
+sentence-transformers==3.4.1
 
 # NumPy: Fast mathematical array operations (used for cosine similarity math)
 # Installed automatically with sentence-transformers, pinned here for clarity
-numpy==2.4.6
+numpy==2.3.2

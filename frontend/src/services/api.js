@@ -90,53 +90,9 @@ export const analyseFile = async (savedName, originalName) => {
 }
 
 // -------------------------------------------------------
-// AI SERVICE DIRECT CALLS (Python FastAPI on port 8000)
-// -------------------------------------------------------
-// These functions call the Python AI service directly from the browser.
-// In a full production setup these would be proxied through the Node backend,
-// but for our development build they call port 8000 directly.
-//
-// Base URL read from .env as VITE_AI_SERVICE_URL, default: http://localhost:8000
-// -------------------------------------------------------
-
-const AI_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000'
-
-// Separate axios instance just for the Python AI service
-const aiClient = axios.create({ baseURL: AI_URL })
-
-// -------------------------------------------------------
-// FUNCTION: generateSummary
-// Calls POST /generate-summary on the Python AI service.
-//
-// Parameters:
-//   text (string): Raw extracted text of the legal judgment
-//
-// Returns:
-//   { status, model_used, summary: { text, word_count, sections_found }, is_fallback }
-// -------------------------------------------------------
-export const generateSummary = async (text) => {
-  const response = await aiClient.post('/generate-summary', { text })
-  return response.data
-}
-
-// -------------------------------------------------------
-// FUNCTION: extractFeatures
-// Calls POST /extract-features on the Python AI service.
-//
-// Parameters:
-//   text (string): Raw extracted text of the legal judgment
-//
-// Returns:
-//   { status, issues: ["..."], principles: ["..."], is_fallback }
-// -------------------------------------------------------
-export const extractFeatures = async (text) => {
-  const response = await aiClient.post('/extract-features', { text })
-  return response.data
-}
-
-// -------------------------------------------------------
 // FUNCTION: getSimilarityScore
-// Calls POST /similarity on the Python AI service.
+// Purpose: Calculate semantic similarity score between two case texts
+// Proxied through the Node.js backend (port 5000) -> Python AI service
 //
 // Parameters:
 //   caseAText (string): Text of the first case
@@ -146,7 +102,7 @@ export const extractFeatures = async (text) => {
 //   { similarity_score: 78, interpretation: "High similarity...", model_used }
 // -------------------------------------------------------
 export const getSimilarityScore = async (caseAText, caseBText) => {
-  const response = await aiClient.post('/similarity', {
+  const response = await apiClient.post('/api/similarity', {
     case_a_text: caseAText,
     case_b_text: caseBText,
   })
@@ -155,7 +111,8 @@ export const getSimilarityScore = async (caseAText, caseBText) => {
 
 // -------------------------------------------------------
 // FUNCTION: compareCases
-// Calls POST /compare-cases on the Python AI service.
+// Purpose: Perform full comparative analysis between two cases
+// Proxied through the Node.js backend (port 5000) -> Python AI service
 //
 // Parameters:
 //   caseA (object): { summary: "...", issues: [], principles: [] }
@@ -173,7 +130,7 @@ export const getSimilarityScore = async (caseAText, caseBText) => {
 //   }
 // -------------------------------------------------------
 export const compareCases = async (caseA, caseB) => {
-  const response = await aiClient.post('/compare-cases', {
+  const response = await apiClient.post('/api/compare-cases', {
     case_a: caseA,
     case_b: caseB,
   })
